@@ -1,24 +1,39 @@
 const productModal = require("../models/product.models");
-
+const cloudinary = require("../configDb/cloud.config")
 const product =async(req,res)=>{
 
      try {
         const {name, price, color, ram, emi}= req.body;
+        const file = req.files.image;
+    
+        const upload = await cloudinary.uploader.upload(file.tempFilePath,{
+            folder:"uploads"
+        })
+        
         const newProduct = new productModal({
             name:name,
             price:price,
             color:color,
             ram:ram,
             emi:emi,
+            image_url:upload.secure_url
         })
 
         await newProduct.save();
-
+        if(upload && newProduct){
         res.status(201).json({
             succes:true,
             message:'Product add successfully!',
+            imageUrl:upload.secure_url,
             product:newProduct
         });
+        }
+        else{
+            res.status(500).json({
+            succes:false,
+            message:'Product not add successfully!',
+          });
+        }
 
      } catch (error) {
         console.log(error.message);
@@ -103,7 +118,7 @@ const delProduct = async(req,res)=>{
 const readProduct = async(req,res)=>{
     try {
         const data = await productModal.find();
-        res.json({data})
+        res.status(201).json({data})
     
      }catch (error) {
         

@@ -21,6 +21,10 @@ const productScheema = mongoose.Schema({
             type:Number,
             required:true,
             unique:true
+        },
+        image_url:{
+            type:String,
+            required:true
         }
 })
 
