@@ -1,9 +1,14 @@
 const userModal = require("../models/user.model");
 
+const jwt = require("jsonwebtoken");
+// JWT Tokens Flow
+// Middleware to check Token
+// Authentication and Authorization
+
 
 const registerUser = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password, role } = req.body;
 
         // 1. Check if all fields are provided
         if (!name || !email || !password) {
@@ -38,16 +43,13 @@ const registerUser = async (req, res) => {
                 message: "Email already exists"
             });
         }
-
-        // 5. Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
+        
         // 6. Create new user
         const newUser = new userModal({
             name,
             email,
-            password: hashedPassword
+            password,
+            role
         });
 
         await newUser.save();
@@ -58,7 +60,8 @@ const registerUser = async (req, res) => {
             user: {
                 id: newUser._id,
                 name: newUser.name,
-                email: newUser.email
+                email: newUser.email,
+                role: newUser.role
             }
         });
 
@@ -81,7 +84,22 @@ const registerUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
     try {
+
         const { email, password } = req.body;
+        if(!email || !password){
+            res.status(400).json({
+                success:false,
+                message:'Required all fields'
+            })
+        }
+
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if(!emailRegex.test(email)){
+            res.status(400).json({
+                success:false,
+                message:'Please Enter Valid Email'
+            })
+        }
 
         // find user by email
         const user = await userModal.findOne({ email });
@@ -94,7 +112,7 @@ const loginUser = async (req, res) => {
                 message: "User not found"
             });
         }
-
+        
         // password check (plain text)
         if (user.password !== password) {
             return res.status(401).json({
@@ -102,16 +120,28 @@ const loginUser = async (req, res) => {
                 message: "Invalid email or password"
             });
         }
+        const token = jwt.sign({
+            id:user._id,
+            role:user.role
+        },process.env.JWT_SECRET)
 
+        user.password = undefined;
         // login success
         res.status(200).json({
             success: true,
             message: "Login successful",
+            token,
             user
         });
 
     } catch (error) {
         console.error(error);
+        if (error.message.includes("timeout")) {
+            return res.status(500).json({
+                success: false,
+                message: "It looks like your internet is slow, please try again"
+            });
+        }
         res.status(500).json({
             success: false,
             message: "Something went wrong while logging in, please try again"

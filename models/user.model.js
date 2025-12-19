@@ -17,6 +17,10 @@ const userSchema = new mongoose.Schema({
     required: true,
     minlength: 5, // minimum 5 characters
   },
+  role:{
+    type:String,
+    default:'user'
+  }
 });
 
 const userModel = mongoose.model("user", userSchema);
