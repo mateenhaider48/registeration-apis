@@ -20,33 +20,62 @@ const authCheck = async(req,res,next)=>{
     const token = authHeader.split(" ")[1];
 
     try {
-        
         const decode = jwt.verify(token,process.env.JWT_SECRET);
         req.user = decode;
-
+        console.log("1st token:",token);
+        
         next();
     } catch (error) {
         
-        res.status(401).json({
-            message:"Token invalid or expired"
-        })
+        const refreshToken = req.cookies.refreshToken;
+        if(!refreshToken){
+             res.status(401).json({
+                message:"No refresh token"
+            })
+        }
+        console.log("refresh token:",refreshToken);
+        
+        try {
+            
+            const decode = jwt.verify(refreshToken,process.env.JWT_REFRESH_SECRET);
+
+            const newToken = jwt.sign({
+                id:decode.id,
+                role:decode.role
+            },process.env.JWT_SECRET,{
+                expiresIn:"15min"
+            })
+            res.setHeader("x-access-token", newToken);
+            req.user = decode;
+            console.log("new token assign");
+            
+            next();
+        } catch (error) {
+            
+            return res.status(403).json({
+                message:"Refresh token expired or invalid"
+            })
+        }
+       
     }
     
 
 }
 
 
-const authorized = (allowedRoles=[])=>{
+const authorized = (...authorizedRoles)=>{
+
     return (req,res,next)=>{
-        
-        if(!allowedRoles.includes(req.user.role)){
-            res.status(403).json({
+
+        const role = req.user?.role
+
+        if(!authorizedRoles.includes(role)){
+            return res.status(403).json({
                 message:"Forbidden: Access denied"
             })
-
-            next();
         }
-}}
-
+            next();
+    }
+}
 
 module.exports = {authCheck, authorized};
