@@ -1,9 +1,12 @@
 const productModal = require("../models/product.models");
+const cloudinary = require("../configDb/cloud.config");
 const addProduct = async (req, res) => {
   try {
     const { name, price, color, ram, emi } = req.body;
 
-    if (!name || !price || !color || !ram || !emi) {
+    const file = req.files.image;
+
+    if (!name || !price || !color || !ram || !emi || !file) {
       return res.status(400).json({
         success: false,
         message: "All fields are required",
@@ -18,12 +21,17 @@ const addProduct = async (req, res) => {
       });
     }
 
+    const upload = await cloudinary.uploader.upload(file.tempFilePath, {
+      folder: "uploads",
+    });
+
     const newProduct = new productModal({
       name,
       price,
       color,
       ram,
       emi,
+      image: upload.secure_url,
     });
 
     await newProduct.save();
@@ -54,7 +62,9 @@ const updateProduct = async (req, res) => {
   try {
     const { emi, newName, newPrice, newColor, newRam } = req.body;
 
-    if (!emi || !newName || !newPrice || !newColor || !newRam) {
+    const file = req.files.image;
+
+    if (!emi || !newName || !newPrice || !newColor || !newRam || !file) {
       res.status(400).json({
         success: false,
         message: "All fields are required",
@@ -110,9 +120,16 @@ const delProduct = async (req, res) => {
         message: "please enter emi",
       });
     }
-    const deleteProduct = await productModal.findOneAndDelete({ emi: emi });
+    const deleteProduct = await productModal.findOne({ emi: emi });
+    console.log(deleteProduct);
+    const url = deleteProduct.image;
+    console.log(url);
+    
+    const public_id = url.split("/").slice(-2).join("/").split(".")[0];
 
-    if (deleteProduct) {
+    await cloudinary.uploader.destroy(public_id);
+    const deletedProduct = await productModal.deleteOne({emi})
+    if (deletedProduct) {
       res.status(201).json({
         succes: true,
         message: "Product delete successfully!",
@@ -120,7 +137,7 @@ const delProduct = async (req, res) => {
       });
     }
 
-    if (!deleteProduct) {
+    if (!delProduct) {
       res.status(404).json({
         succes: false,
         message: "Product not found!",

@@ -2,17 +2,16 @@ const userModal = require("../models/user.model");
 const cookie = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const otpModal = require("../models/otp.model");
-const sendEmail = require("../configDb/send.email");
-// JWT Tokens Flow
-// Middleware to check Token
-// Authentication and Authorization
+const { sendEmail } = require("../configDb/send.email");
+const bcrypt = require('bcryptjs');
+
 
 const registerUser = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
     // 1. Check if all fields are provided
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !role) {
       return res.status(403).json({
         success: false,
         message: "All fields are required",
@@ -45,11 +44,13 @@ const registerUser = async (req, res) => {
       });
     }
 
+    const hashPassword = await bcrypt.hash(password,12)
+
     // 6. Create new user
     const newUser = new userModal({
       name,
       email,
-      password,
+      password: hashPassword,
       role,
     });
 
@@ -101,7 +102,7 @@ const loginUser = async (req, res) => {
     }
 
     // find user by email
-    const user = await userModal.findOne({ email });
+    const user = await userModal.findOne({ email })
     console.log("This is user from login", user);
 
     // user not found
@@ -113,7 +114,8 @@ const loginUser = async (req, res) => {
     }
 
     // password check (plain text)
-    if (user.password !== password) {
+    const isMatch = await bcrypt.compare(password,user.password)
+    if (!isMatch) {
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
@@ -126,7 +128,7 @@ const loginUser = async (req, res) => {
       },
       process.env.JWT_SECRET,
       {
-        expiresIn: "1h",
+        expiresIn: "1d",
       }
     );
 
@@ -203,7 +205,7 @@ const changePassword = async (req, res) => {
       });
     }
 
-    const newHashPassword = await bcrypt.hash(newPassword, 10);
+    const newHashPassword = await bcrypt.hash(newPassword, 12);
     user.password = newHashPassword;
 
     const saveUser = await user.save();
@@ -239,10 +241,9 @@ const changePassword = async (req, res) => {
 const forgetPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    console.log("email:", email);
+    console.log("Email from req.body in controller", email);
 
     const user = await userModal.findOne({ email: email });
-    console.log("user :", user);
 
     if (!user) {
       return res.status(404).json({
@@ -251,8 +252,8 @@ const forgetPassword = async (req, res) => {
       });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 999999);
-    console.log("otp:", otp);
+    const otp = Math.floor(100000 + Math.random() * 900000);
+    console.log("Otp in controller", otp);
 
     const newOtp = new otpModal({
       otp,
@@ -260,22 +261,27 @@ const forgetPassword = async (req, res) => {
     });
 
     await newOtp.save();
-    console.log(newOtp);
+
+    console.log("This is newOTP in controller", newOtp);
 
     const message = `Yor verification code for password reset is ${otp}`;
-    console.log(message);
-    console.log(process.env.MY_EMAIL);
-    console.log(process.env.MY_APP_PASSWORD);
-    const isSend = sendEmail(email, "Reset Password", message);
+    console.log("This is generated message in controller:", message);
+    const subject = "Reset Password";
+
+    const isSend = await sendEmail(email, subject, message);
+
+    console.log("this is isSend response", isSend);
+
     if (isSend) {
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
         message: "OTP is send to your email",
       });
     }
   } catch (error) {
+    console.log("This is error in forget password:", error);
     if (error.message.includes("timeout")) {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: "Network error, please try again later",
       });
@@ -289,27 +295,27 @@ const forgetPassword = async (req, res) => {
 
 const verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
-  
+
   try {
     const verified = await otpModal.findOne({ email, otp });
-
-    if (!verified || Date.now > verified.createdAt.getTime() + 600) {
-      res.status(400).json({
+    const expiresAt = 10 * 60 * 1000;
+    if (!verified || Date.now() > verified.createdAt.getTime() + expiresAt) {
+      return res.status(400).json({
         message: "Invalid or Expired OTP",
       });
     } else {
-      res.status(200).json({
+      return res.status(200).json({
         message: "OTP verified.",
       });
     }
   } catch (error) {
     if (error.message.includes("timeout")) {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: "Network error, please try again later",
       });
     }
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "error occurs",
     });
@@ -333,8 +339,8 @@ const resetPassword = async (req, res) => {
         message: "user not exists",
       });
     }
-
-    user.password = newPassword;
+    const newHashPassword = await bcrypt.hash(newPassword,12)
+    user.password = newHashPassword;
     await user.save();
     await otpModal.deleteMany({ email });
     res.status(200).json({
@@ -349,9 +355,16 @@ const resetPassword = async (req, res) => {
     }
     res.status(500).json({
       success: false,
-      message:
-        "Something went wrong while reseting password, please try again",
+      message: "Something went wrong while reseting password, please try again",
     });
   }
 };
-module.exports = { registerUser, loginUser, changePassword, forgetPassword ,verifyOtp , resetPassword };
+
+module.exports = {
+  registerUser,
+  loginUser,
+  changePassword,
+  forgetPassword,
+  verifyOtp,
+  resetPassword,
+};

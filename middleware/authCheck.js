@@ -22,7 +22,6 @@ const authCheck = async(req,res,next)=>{
     try {
         const decode = jwt.verify(token,process.env.JWT_SECRET);
         req.user = decode;
-        console.log("1st token:",token);
         
         next();
     } catch (error) {
@@ -33,10 +32,9 @@ const authCheck = async(req,res,next)=>{
                 message:"No refresh token"
             })
         }
-        console.log("refresh token:",refreshToken);
         
         try {
-            
+
             const decode = jwt.verify(refreshToken,process.env.JWT_REFRESH_SECRET);
 
             const newToken = jwt.sign({
@@ -47,11 +45,10 @@ const authCheck = async(req,res,next)=>{
             })
             res.setHeader("x-access-token", newToken);
             req.user = decode;
-            console.log("new token assign");
-            
+
             next();
         } catch (error) {
-            
+
             return res.status(403).json({
                 message:"Refresh token expired or invalid"
             })
