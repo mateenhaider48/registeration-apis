@@ -3,8 +3,7 @@ const cookie = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const otpModal = require("../models/otp.model");
 const { sendEmail } = require("../configDb/send.email");
-const bcrypt = require('bcryptjs');
-
+const bcrypt = require("bcryptjs");
 
 const registerUser = async (req, res) => {
   try {
@@ -19,11 +18,18 @@ const registerUser = async (req, res) => {
     }
 
     // 2. Validate password length
-    if (password.length < 5) {
+    if (password.length < 8) {
       return res.status(400).json({
         success: false,
         message: "Password must be at least 5 characters",
       });
+    }
+    const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).+$/
+    if( !strongPassword.test(password)){
+      return res.status(404).json({
+        success:false,
+        message:"Password must have atleast 1 special character,1 small letter,1 Capital letter, 1 Number."
+      })
     }
 
     // 3. Validate email format
@@ -44,7 +50,7 @@ const registerUser = async (req, res) => {
       });
     }
 
-    const hashPassword = await bcrypt.hash(password,12)
+    const hashPassword = await bcrypt.hash(password, 12);
 
     // 6. Create new user
     const newUser = new userModal({
@@ -102,7 +108,7 @@ const loginUser = async (req, res) => {
     }
 
     // find user by email
-    const user = await userModal.findOne({ email })
+    const user = await userModal.findOne({ email });
     console.log("This is user from login", user);
 
     // user not found
@@ -114,7 +120,7 @@ const loginUser = async (req, res) => {
     }
 
     // password check (plain text)
-    const isMatch = await bcrypt.compare(password,user.password)
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -153,7 +159,6 @@ const loginUser = async (req, res) => {
 
     user.password = undefined;
 
-    // login success
     res.status(200).json({
       success: true,
       message: "Login successful",
@@ -240,9 +245,14 @@ const changePassword = async (req, res) => {
 
 const forgetPassword = async (req, res) => {
   try {
+    
+    
     const { email } = req.body;
     console.log("Email from req.body in controller", email);
-
+    const exist = await otpModal.findOne({ email });
+    if (exist) {
+      await otpModal.deleteMany({ email });
+    }
     const user = await userModal.findOne({ email: email });
 
     if (!user) {
@@ -253,7 +263,6 @@ const forgetPassword = async (req, res) => {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000);
-    console.log("Otp in controller", otp);
 
     const newOtp = new otpModal({
       otp,
@@ -262,10 +271,7 @@ const forgetPassword = async (req, res) => {
 
     await newOtp.save();
 
-    console.log("This is newOTP in controller", newOtp);
-
     const message = `Yor verification code for password reset is ${otp}`;
-    console.log("This is generated message in controller:", message);
     const subject = "Reset Password";
 
     const isSend = await sendEmail(email, subject, message);
@@ -292,6 +298,7 @@ const forgetPassword = async (req, res) => {
     });
   }
 };
+
 
 const verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
@@ -339,7 +346,13 @@ const resetPassword = async (req, res) => {
         message: "user not exists",
       });
     }
-    const newHashPassword = await bcrypt.hash(newPassword,12)
+    if(newPassword.length < 8){
+      res.status(401).json({
+        success:"false",
+        message:"Password must be at least 8 character long"
+      })
+    }
+    const newHashPassword = await bcrypt.hash(newPassword, 12);
     user.password = newHashPassword;
     await user.save();
     await otpModal.deleteMany({ email });
@@ -360,6 +373,27 @@ const resetPassword = async (req, res) => {
   }
 };
 
+const logout = async (req, res) => {
+  try {
+    console.log(req.cookies,refreshToken);
+    
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: false,
+      path: "/api",
+      sameSite: "strict",
+    });
+    return res.status(200).json({
+      succes: true,
+      message: "Logout Successfully!",
+    })
+  } catch (error) {
+    return res.status(500).json({
+      success: "false",
+      message: "Logout Failed",
+    });
+  }
+};
 module.exports = {
   registerUser,
   loginUser,
@@ -367,4 +401,5 @@ module.exports = {
   forgetPassword,
   verifyOtp,
   resetPassword,
+  logout,
 };

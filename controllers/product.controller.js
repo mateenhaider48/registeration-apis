@@ -70,6 +70,16 @@ const updateProduct = async (req, res) => {
         message: "All fields are required",
       });
     }
+    const imageFile = await productModal.findOne({emi});
+    const url = imageFile.image;
+
+    const public_id = url.split("/").slice(-2).join("/").split(".")[0];
+
+    await cloudinary.uploader.destroy(public_id);
+
+    const updateImg = cloudinary.uploader.upload(file.tempFilePath,{
+      folder:"uploads"
+    })
 
     const findProduct = await productModal.findOneAndUpdate(
       { emi: emi },
@@ -79,8 +89,10 @@ const updateProduct = async (req, res) => {
         color: newColor,
         ram: newRam,
         emi,
+        image: updateImg.secure_url
       }
     );
+
 
     if (findProduct) {
       res.status(201).json({
@@ -121,10 +133,8 @@ const delProduct = async (req, res) => {
       });
     }
     const deleteProduct = await productModal.findOne({ emi: emi });
-    console.log(deleteProduct);
     const url = deleteProduct.image;
-    console.log(url);
-    
+
     const public_id = url.split("/").slice(-2).join("/").split(".")[0];
 
     await cloudinary.uploader.destroy(public_id);
