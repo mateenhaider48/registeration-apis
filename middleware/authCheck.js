@@ -7,13 +7,13 @@ const authCheck = async(req,res,next)=>{
 
     if(!authHeader){
 
-        res.status(401).json({
+        return res.status(401).json({
             message:"Athorization header missing"
         })
     }
 
     if(!authHeader.startsWith("Bearer ")){
-        res.status(401).json({
+        return res.status(401).json({
             message:"Invalid token format"
         })
     }
@@ -28,7 +28,7 @@ const authCheck = async(req,res,next)=>{
         
         const refreshToken = req.cookies.refreshToken;
         if(!refreshToken){
-             res.status(401).json({
+             return res.status(401).json({
                 message:"No refresh token"
             })
         }
@@ -68,7 +68,7 @@ const authorized = (...authorizedRoles)=>{
 
         if(!authorizedRoles.includes(role)){
             return res.status(403).json({
-                message:"Forbidden: Access denied"
+                message:"Forbidden: Access denied!"
             })
         }
             next();
